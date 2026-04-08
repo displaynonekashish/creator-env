@@ -8,7 +8,7 @@ import uvicorn
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server.creator_env_environment import CreatorEnvironment
-from .models import Action 
+from models import Action 
 
 app = FastAPI(title="Influencer Business Sim")
 _env = CreatorEnvironment()
@@ -52,9 +52,6 @@ async def state():
         "score": _env._calculate_score()
     }
 
-def main():
-    """Entry point for the OpenEnv validator and server start."""
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 if __name__ == "__main__":
-    main()
+    uvicorn.run(app, host="0.0.0.0", port=7860)
+
