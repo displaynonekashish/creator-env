@@ -1,0 +1,98 @@
+name: influencer_business_sim
+version: "1.0.0"
+description: >
+  A real-world simulation of an influencer/content creator managing brand deal
+  negotiations. The agent must accept, reject, or counter sponsorship offers
+  while balancing niche alignment, brand reputation, fatigue, and monthly
+  revenue targets across three tasks of increasing difficulty.
+entrypoint: "server.app:app"
+
+action_space:
+  type: object
+  properties:
+    decision:
+      type: string
+      enum: [accept, reject, counter]
+      description: "The agent's response to the current deal."
+    counter_price:
+      type: number
+      nullable: true
+      description: "Requested price when decision is counter. Null otherwise."
+
+observation_space:
+  type: object
+  properties:
+    creator_niches:
+      type: array
+      items:
+        type: string
+      description: "Active content niches (e.g. ['fitness', 'tech'])."
+    followers:
+      type: integer
+      description: "Total follower count (reach)."
+    engagement_rate:
+      type: number
+      description: "Audience engagement quality (0.0–1.0)."
+    reputation:
+      type: number
+      description: "Creator brand safety score (0.0–1.0)."
+    fatigue:
+      type: number
+      description: "Burnout level; high fatigue reduces performance (0.0–1.0)."
+    earnings:
+      type: number
+      description: "Total cash earned this episode."
+    monthly_target:
+      type: number
+      description: "Revenue goal — hitting this gives max revenue score."
+    deal:
+      type: object
+      nullable: true
+      description: "Current deal: {brand, category, initial_offer, brand_rating}."
+    task:
+      type: string
+      description: "Active task id."
+    step:
+      type: integer
+      description: "Current step index (0-based)."
+    max_steps:
+      type: integer
+      description: "Total steps per episode."
+
+tasks:
+  - id: niche_alignment
+    description: >
+      Accept only deals whose category matches the creator's niches AND whose
+      brand_rating exceeds 0.6. Reject everything else. Tests basic filtering.
+    difficulty: easy
+    success_threshold: 0.60
+
+  - id: reputation_protection
+    description: >
+      Protect the creator's reputation by rejecting any brand with
+      brand_rating < 0.5, even if it falls within the creator's niche.
+      Accept only high-trust, niche-matched deals.
+    difficulty: medium
+    success_threshold: 0.60
+
+  - id: target_negotiation
+    description: >
+      Maximise monthly earnings by countering offers at 1.3x when the deal is
+      good, then accepting. Must reach the monthly revenue target while keeping
+      fatigue below 0.75 and reputation above 0.5.
+    difficulty: hard
+    success_threshold: 0.60
+
+reward:
+  range: [-20.0, 25.0]
+  description: >
+    Per-step reward based on decision quality. Positive for correct accepts and
+    valid counters; negative for bad accepts (low trust, off-niche) or missed
+    good deals. Final episode score (0.0–1.0) combines revenue progress,
+    reputation health, and fatigue level with task-specific weights.
+
+metadata:
+  author: "creator-env"
+  tags: [influencer, negotiation, business, real-world]
+  max_steps: 5
+  language: python
