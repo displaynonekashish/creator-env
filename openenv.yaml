@@ -1,98 +1,155 @@
-name: influencer_business_sim
-version: "1.0.0"
-description: >
-  A real-world simulation of an influencer/content creator managing brand deal
-  negotiations. The agent must accept, reject, or counter sponsorship offers
-  while balancing niche alignment, brand reputation, fatigue, and monthly
-  revenue targets across three tasks of increasing difficulty.
-entrypoint: "server.app:app"
+name: influencer-biz-sim
+version: "3.0.0"
+tagline: "The creator economy deal room, simulated with real-world precision"
 
-action_space:
-  type: object
-  properties:
-    decision:
-      type: string
-      enum: [accept, reject, counter]
-      description: "The agent's response to the current deal."
-    counter_price:
-      type: number
-      nullable: true
-      description: "Requested price when decision is counter. Null otherwise."
+difficulty: hard
+reward_type: sparse-episodic
+horizon: 10
+
+novelty: |
+  Most negotiation environments reward greedy agents. This one punishes them.
+  The highest-value offer in the observation is statistically the most likely
+  reputation trap (SHADY brand archetype). An agent that sorts by offer size
+  will reliably destroy its creator's reputation within 3 episodes.
+
+  Solving requires:
+    1. Multi-turn social signal reading across 5 hidden brand archetypes
+       (personality type never given — must be inferred from observable signals)
+    2. SHADY brand detection: vague briefs, urgency pressure, unverifiable presence,
+       suspiciously inflated offer — all observable, requiring pattern recognition
+    3. Pipeline-aware decisions under exclusivity lockout constraints
+    4. Gifted deal nuance — early-believer upside (Stanley Cup / Glossier model)
+       vs exploitation detection (established brand gifting = disrespect)
+    5. Fatigue budget management with non-linear burnout cliff (0.5/0.7/0.9)
+    6. Parasocial debt as hidden constraint — must post organic content
+       between deals or lose audience engagement
+    7. Integrity test — one moment per season where math cannot tell you what to do.
+       The financially optimal action directly conflicts with creator values.
+    8. Seasonal timing strategy — conserve fatigue bandwidth for Q4 Black Friday
+       peak (1.5x budget multiplier)
+    9. Payment structure expected value: upfront vs revenue share vs gifted
+       (certainty × multiplier — requires probabilistic reasoning)
+
+real_world_basis: creator-economy / influencer-marketing
+industry_accuracy: high
 
 observation_space:
-  type: object
-  properties:
-    creator_niches:
-      type: array
-      items:
-        type: string
-      description: "Active content niches (e.g. ['fitness', 'tech'])."
-    followers:
-      type: integer
-      description: "Total follower count (reach)."
-    engagement_rate:
-      type: number
-      description: "Audience engagement quality (0.0–1.0)."
-    reputation:
-      type: number
-      description: "Creator brand safety score (0.0–1.0)."
-    fatigue:
-      type: number
-      description: "Burnout level; high fatigue reduces performance (0.0–1.0)."
-    earnings:
-      type: number
-      description: "Total cash earned this episode."
-    monthly_target:
-      type: number
-      description: "Revenue goal — hitting this gives max revenue score."
-    deal:
-      type: object
-      nullable: true
-      description: "Current deal: {brand, category, initial_offer, brand_rating}."
-    task:
-      type: string
-      description: "Active task id."
-    step:
-      type: integer
-      description: "Current step index (0-based)."
-    max_steps:
-      type: integer
-      description: "Total steps per episode."
+  dimensions: 14
+  fields:
+    creator_niches:          "List[str] — up to 3 niches with crossover compatibility matrix"
+    niche_reputation:        "Dict[str, float] — per-niche score 0-1"
+    followers:               "int — grows/shrinks based on deal decisions"
+    engagement_rate:         "float — degrades with fatigue and parasocial debt"
+    media_kit:               "MediaKit — creator's market-facing profile; outdated = lowball offers"
+    reputation:              "float [0,1] — long-term brand health"
+    audience_trust:          "float [0,1] — drops with bad deals; <0.6 = followers don't count"
+    fatigue:                 "float [0,1] — non-linear cliff at 0.7 and 0.9; 1.0 = burnout"
+    parasocial_debt:         "int — >3 triggers engagement drop; reset with organic post"
+    consecutive_bad_deals:   "int — 3+ triggers trust crisis with -20% follower unfollow"
+    market_season:           "MarketSeason — multiplier from 0.60 (Jan) to 1.50 (Nov)"
+    lockout_calendar:        "Dict[str, int] — category exclusivity days remaining"
+    deal:                    "BrandDeal | null — current offer with full contract terms"
+    negotiation:             "NegotiationState — turn, patience, mood, clauses"
+
+action_space:
+  type: extended-discrete
+  actions:
+    - accept
+    - reject
+    - counter_10              # +10% — safe for luxury brands
+    - counter_20              # +20% — standard push
+    - counter_40              # +40% — aggressive
+    - counter_60              # +60% — makes luxury/shady angry
+    - request_kill_clause     # protect against brand PR crises
+    - request_exclusivity_waiver  # negotiate out lockout clause
+    - request_revision_cap    # cap revision rounds at 2
+    - unbox_product           # reveal hidden product_quality (needed for gifted eval)
+    - post_organic_content    # reduce parasocial_debt, maintain engagement
+
+brand_personalities:
+  hidden: true   # agent is NEVER told personality type — must infer from signals
+  types:
+    luxury:
+      patience: 2
+      observable_signals: ["high_initial_offer", "exclusivity_required", "brief_precise"]
+    startup:
+      patience: 8
+      observable_signals: ["low_offer", "founder_engaged", "revenue_stage_early"]
+    mass_market:
+      patience: 4
+      observable_signals: ["medium_offer", "many_deliverables", "wants_virality"]
+    shady:
+      patience: 3
+      observable_signals: ["inflated_offer_40pct_above_market", "brief_is_vague",
+                            "urgency_pressure", "no_verifiable_presence"]
+      trap: true
+      note: "Accepting destroys -30 rep and -35 audience_trust. Highest offer = likely trap."
+    premium:
+      patience: 3
+      observable_signals: ["moderate_offer", "reasonable_terms", "good_rating"]
+
+deal_system:
+  gifted_deals:
+    early_believer_model: "Stanley Cup / Glossier — accepting gifted from pre-revenue startup
+                           can return 3-5x when brand goes viral. Requires 3+ positive signals."
+    signals: ["founder_engaged", "product_quality>0.7", "community_buzz>0.5", "niche_fit"]
+  payment_structures:
+    upfront:       {certainty: 1.00, multiplier: 1.00}
+    milestone:     {certainty: 0.85, multiplier: 1.15}
+    revenue_share: {certainty: 0.30, multiplier: 2.50}
+    gifted_only:   {certainty: 1.00, cash: 0}
+  exclusivity: "Accepting lockout in a category may block a higher-value deal arriving in 45 days"
+  kill_clause:  "Without kill clause, brand PR crisis costs -25 rep and -8% followers"
+
+scoring:
+  primary_metric: season_sustainability_score
+  formula: |
+    follower_value = followers × audience_trust (zero if trust < 0.6)
+    base = follower_value×W1 + revenue×W2 + reputation×W3 + sustainability×W4 + brand_diversity×W5
+    sellout_penalty = Σ(0.3^i) × 0.12  [exponential — 3 sellouts is devastating]
+    integrity_penalty = 0.15 if integrity_test_failed
+    final_score = base - sellout_penalty - integrity_penalty
+  task_weights:
+    niche_alignment:       {follower_value: 0.30, revenue: 0.25, reputation: 0.30, sustainability: 0.10, diversity: 0.05}
+    reputation_protection: {follower_value: 0.20, revenue: 0.20, reputation: 0.45, sustainability: 0.10, diversity: 0.05}
+    target_negotiation:    {follower_value: 0.20, revenue: 0.45, reputation: 0.20, sustainability: 0.10, diversity: 0.05}
+  penalizes:
+    - sellout_rate (exponential decay — not linear)
+    - trust_crisis_episodes (3+ consecutive bad deals)
+    - burnout_episodes (fatigue >= 1.0)
+    - shady_brand_accepted
+    - integrity_test_failed
+    - audience_trust < 0.6 (makes followers worthless)
+  rewards:
+    - correct_shady_detection (+rep +trust)
+    - brand_diversity
+    - integrity_test_passed (+rep +trust premium)
+    - early_believer_relationships (viral upside)
+    - kill_clause_when_needed
+    - parasocial_debt_management
+
+endpoints:
+  reset:     "POST /reset"
+  step:      "POST /step"
+  state:     "GET  /state"
+  benchmark: "GET  /benchmark?n_episodes=10&task=target_negotiation"
+  health:    "GET  /health"
 
 tasks:
   - id: niche_alignment
-    description: >
-      Accept only deals whose category matches the creator's niches AND whose
-      brand_rating exceeds 0.6. Reject everything else. Tests basic filtering.
     difficulty: easy
+    description: "Filter deals based on creator niche relevance. Multi-niche profiles, crossover matrix."
     success_threshold: 0.60
 
   - id: reputation_protection
-    description: >
-      Protect the creator's reputation by rejecting any brand with
-      brand_rating < 0.5, even if it falls within the creator's niche.
-      Accept only high-trust, niche-matched deals.
     difficulty: medium
+    description: "Strict brand-safety. SHADY trap present. Integrity test fires. Sellout penalty heavy."
     success_threshold: 0.60
 
   - id: target_negotiation
-    description: >
-      Maximise monthly earnings by countering offers at 1.3x when the deal is
-      good, then accepting. Must reach the monthly revenue target while keeping
-      fatigue below 0.75 and reputation above 0.5.
     difficulty: hard
+    description: "Hit $6,250 via multi-turn negotiation. All 5 personalities. Integrity test. Q4 seasonal bonus."
     success_threshold: 0.60
 
-reward:
-  range: [-20.0, 25.0]
-  description: >
-    Per-step reward based on decision quality. Positive for correct accepts and
-    valid counters; negative for bad accepts (low trust, off-niche) or missed
-    good deals. Final episode score (0.0–1.0) combines revenue progress,
-    reputation health, and fatigue level with task-specific weights.
-
-metadata:
-  author: "creator-env"
-  tags: [influencer, negotiation, business, real-world]
-  max_steps: 5
-  language: python
+win_state:  "All 3 tasks score >= 0.60 with ambassador_progression"
+lose_state: "creator_burnout (fatigue >= 1.0) OR trust_crisis_with_no_recovery"
